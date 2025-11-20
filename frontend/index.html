@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>德州扑克测试</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+        #log { border: 1px solid #ccc; background: white; height: 300px; overflow-y: scroll; padding: 10px; margin-top: 10px; }
+        .msg { margin: 5px 0; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 通信测试</h1>
+    <p>状态: <span id="status" style="color:red">未连接</span></p>
+    
+    <input type="text" id="inputMsg" placeholder="输入内容..." value="Hello Python!">
+    <button onclick="sendMessage()">发送消息</button>
+
+    <div id="log"></div>
+
+    <script>
+        // 连接到本地的 8000 端口 ws 路由
+        const ws = new WebSocket("ws://localhost:8000/ws");
+        const statusSpan = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        ws.onopen = function() {
+            statusSpan.innerText = "已连接";
+            statusSpan.style.color = "green";
+            log("系统: 连接成功！");
+        };
+
+        ws.onmessage = function(event) {
+            log("收到服务器: " + event.data);
+        };
+
+        ws.onclose = function() {
+            statusSpan.innerText = "已断开";
+            statusSpan.style.color = "red";
+        };
+
+        function sendMessage() {
+            const input = document.getElementById('inputMsg');
+            const text = input.value;
+            ws.send(text);
+            log("我发送: " + text);
+        }
+
+        function log(msg) {
+            const div = document.createElement("div");
+            div.className = "msg";
+            div.innerText = msg;
+            logDiv.appendChild(div);
+            logDiv.scrollTop = logDiv.scrollHeight; // 自动滚动到底部
+        }
+    </script>
+</body>
+</html>
