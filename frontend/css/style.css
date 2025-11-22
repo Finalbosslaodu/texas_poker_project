@@ -1,0 +1,68 @@
+/* 自定义卡牌样式补充 */
+.card-anim {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 玩家头像区域 */
+.player-seat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 120px;
+    transition: all 0.3s;
+}
+
+.avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    z-index: 2;
+}
+
+.info {
+    background: #1f2937;
+    margin-top: -30px;
+    padding-top: 35px;
+    padding-bottom: 5px;
+    width: 100%;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: #e5e7eb;
+    border: 1px solid #374151;
+}
+
+.hand-mini {
+    display: flex;
+    gap: 2px;
+    margin-top: -10px;
+    z-index: 0;
+}
+
+.card-back {
+    width: 20px;
+    height: 30px;
+    background: #3b82f6;
+    border-radius: 2px;
+    border: 1px solid #fff;
+}
+
+.action-badge {
+    position: absolute;
+    top: 0;
+    right: -10px;
+    background: #eab308;
+    color: black;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}

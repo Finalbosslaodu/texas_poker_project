@@ -1,58 +1,173 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>德州扑克测试</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
-        #log { border: 1px solid #ccc; background: white; height: 300px; overflow-y: scroll; padding: 10px; margin-top: 10px; }
-        .msg { margin: 5px 0; border-bottom: 1px solid #eee; }
-    </style>
-</head>
-<body>
-    <h1>WebSocket 通信测试</h1>
-    <p>状态: <span id="status" style="color:red">未连接</span></p>
-    
-    <input type="text" id="inputMsg" placeholder="输入内容..." value="Hello Python!">
-    <button onclick="sendMessage()">发送消息</button>
-
-    <div id="log"></div>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texas Hold'em Lobby</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
     <script>
-        // 连接到本地的 8000 端口 ws 路由
-        const ws = new WebSocket("ws://localhost:8000/ws");
-        const statusSpan = document.getElementById('status');
-        const logDiv = document.getElementById('log');
-
-        ws.onopen = function() {
-            statusSpan.innerText = "已连接";
-            statusSpan.style.color = "green";
-            log("系统: 连接成功！");
-        };
-
-        ws.onmessage = function(event) {
-            log("收到服务器: " + event.data);
-        };
-
-        ws.onclose = function() {
-            statusSpan.innerText = "已断开";
-            statusSpan.style.color = "red";
-        };
-
-        function sendMessage() {
-            const input = document.getElementById('inputMsg');
-            const text = input.value;
-            ws.send(text);
-            log("我发送: " + text);
-        }
-
-        function log(msg) {
-            const div = document.createElement("div");
-            div.className = "msg";
-            div.innerText = msg;
-            logDiv.appendChild(div);
-            logDiv.scrollTop = logDiv.scrollHeight; // 自动滚动到底部
+        tailwind.config = {
+            theme: { extend: { colors: { poker: { bg: '#1a1a1a', table: '#262626', accent: '#3b82f6' } } } }
         }
     </script>
+</head>
+<body class="bg-poker-bg text-white h-screen overflow-hidden select-none">
+    <div id="app" class="h-full w-full relative">
+
+        <!-- =================== VIEW 1: 大厅 & 选座 =================== -->
+        <div v-if="gameState?.stage === 'LOBBY'" class="h-full flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 to-black">
+            
+            <h1 class="text-6xl font-bold text-yellow-500 mb-32 tracking-widest drop-shadow-lg z-10">TEXAS HOLD'EM</h1>
+            
+            <!-- 选座桌子 -->
+            <div class="relative w-[900px] h-[500px] bg-poker-table rounded-[250px] border-[12px] border-gray-800 shadow-2xl flex items-center justify-center mb-10 z-0">
+                <div class="text-gray-500 font-bold text-2xl tracking-widest opacity-50">SELECT YOUR SEAT</div>
+
+                <div v-for="(s, i) in seats" :key="i" class="absolute" :style="getLobbySeatStyle(i)">
+                    <seat-node :idx="i" :seat="seats[i]"></seat-node>
+                </div>
+            </div>
+
+            <!-- 开始按钮 -->
+            <button @click="sendAction('start_game')" :disabled="playerCount < 2"
+                    class="mt-20 px-12 py-4 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-2xl font-bold rounded-full shadow-lg transition-all transform hover:scale-105 z-10">
+                START GAME ({{ playerCount }}/12)
+            </button>
+
+            <!-- AI 选择弹窗 -->
+            <div v-if="showBotModal" class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center">
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-600 w-96">
+                    <h3 class="text-xl font-bold mb-4">Add AI Bot to Seat {{ selectedSeat }}</h3>
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <button v-for="(name, lv) in aiLevels" :key="lv" @click="addBot(lv)"
+                                class="p-3 bg-gray-700 hover:bg-blue-600 rounded text-sm font-bold transition-colors text-left">
+                            Lv{{ lv }}: {{ name }}
+                        </button>
+                    </div>
+                    <button @click="showBotModal = false" class="w-full py-2 bg-red-600 hover:bg-red-500 rounded">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================== VIEW 2: 游戏界面 =================== -->
+        <div v-else class="h-full flex flex-col items-center justify-center relative">
+            <!-- 顶部栏 -->
+            <div class="absolute top-0 w-full p-4 flex justify-between items-center bg-black/30 backdrop-blur-sm z-10">
+                <div class="font-bold text-xl text-poker-accent">Table #1</div>
+                <div class="text-sm text-gray-400">Pot: ${{ gameState?.pot }} | Blind: $20</div>
+            </div>
+
+            <!-- 桌子 -->
+            <div class="relative w-full max-w-6xl aspect-[16/9] bg-poker-table rounded-[100px] border-8 border-gray-800 shadow-2xl flex items-center justify-center">
+                
+                <!-- 公共牌 -->
+                <div class="flex gap-2 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-[-20px]">
+                    <div v-for="(card, i) in communityCards" :key="i" class="w-14 h-20 bg-white rounded flex flex-col items-center justify-center shadow-lg text-black border border-gray-300">
+                        <span class="text-lg font-bold" :class="getSuitColor(card.suit)">{{ card.rank_str }}</span>
+                        <span class="text-xl" :class="getSuitColor(card.suit)">{{ card.suit }}</span>
+                    </div>
+                </div>
+                <div class="absolute top-[35%] font-bold text-yellow-500 text-2xl drop-shadow-md">${{ gameState?.pot }}</div>
+
+                <!-- 动态渲染所有座位上的玩家 -->
+                <game-seat v-for="(p, idx) in seats" :key="idx" :player="p" :idx="idx" 
+                           :current="gameState?.current_player" 
+                           :stage="gameState?.stage"
+                           class="absolute"></game-seat>
+            </div>
+
+            <!-- 底部操作栏 (新版: 可编辑加注) -->
+            <div v-if="mySeatPlayer && isMyTurn" class="absolute bottom-10 flex gap-4 animate-slide-up items-center bg-black/50 p-4 rounded-2xl backdrop-blur-sm border border-white/10 z-20">
+                <button @click="sendAction('fold')" class="btn bg-red-700 hover:bg-red-600 border-b-4 border-red-900 active:border-b-0 active:translate-y-1">FOLD</button>
+                
+                <button @click="sendAction(canCheck ? 'check' : 'call')" 
+                        class="btn bg-blue-600 hover:bg-blue-500 border-b-4 border-blue-900 active:border-b-0 active:translate-y-1 min-w-[120px]">
+                    {{ canCheck ? 'CHECK' : 'CALL ' + toCallAmount }}
+                </button>
+                
+                <!-- 加注区域 -->
+                <div class="flex items-center gap-2 bg-gray-800 p-2 rounded-xl border border-gray-700 ml-4">
+                    <button @click="adjustRaise(-100)" class="w-8 h-10 bg-gray-600 hover:bg-gray-500 rounded text-white font-bold">-</button>
+                    
+                    <div class="relative">
+                        <div class="absolute left-2 top-1/2 -translate-y-1/2 text-yellow-500 font-bold">$</div>
+                        <input type="number" v-model.number="raiseAmount" 
+                               class="w-24 h-10 bg-gray-900 text-white font-bold text-center pl-4 rounded border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                               :min="minRaise">
+                    </div>
+                    
+                    <button @click="adjustRaise(100)" class="w-8 h-10 bg-gray-600 hover:bg-gray-500 rounded text-white font-bold">+</button>
+                    
+                    <button @click="sendAction('raise', raiseAmount)" 
+                            class="btn bg-green-600 hover:bg-green-500 border-b-4 border-green-900 active:border-b-0 active:translate-y-1 ml-2">
+                        BET
+                    </button>
+                </div>
+                
+                <!-- 快捷按钮 -->
+                <div class="flex gap-2 ml-2">
+                    <button @click="raiseAmount = Math.floor(gameState.pot / 2) + gameState.current_bet" class="px-3 py-1 bg-gray-700 rounded text-xs hover:bg-gray-600">1/2 Pot</button>
+                    <button @click="raiseAmount = gameState.pot + gameState.current_bet" class="px-3 py-1 bg-gray-700 rounded text-xs hover:bg-gray-600">Pot</button>
+                    <button @click="raiseAmount = mySeatPlayer.chips + mySeatPlayer.round_bet" class="px-3 py-1 bg-red-900 text-red-200 rounded text-xs hover:bg-red-800 border border-red-700">ALL IN</button>
+                </div>
+            </div>
+
+            <!-- 结算遮罩 -->
+            <div v-if="gameState?.stage === 'SHOWDOWN'" class="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
+                <div class="bg-gray-900 p-6 rounded-3xl border-2 border-gray-700 text-center max-w-4xl w-full max-h-screen overflow-y-auto">
+                    <h2 class="text-3xl font-bold text-yellow-500 mb-4">ROUND RESULT</h2>
+                    
+                    <!-- 公共牌 -->
+                    <div class="mb-6 p-4 bg-gray-800 rounded-xl border border-gray-700 inline-block mt-2">
+                        <div class="text-gray-400 text-xs mb-2 uppercase tracking-wider">Community Cards</div>
+                        <div class="flex gap-2 justify-center">
+                            <div v-for="(card, i) in communityCards" :key="i" 
+                                class="w-10 h-14 bg-white rounded flex flex-col items-center justify-center border border-gray-500 text-black shadow-sm">
+                                <span class="text-xs font-bold" :class="getSuitColor(card.suit)">{{ card.rank_str }}</span>
+                                <span class="text-xs" :class="getSuitColor(card.suit)">{{ card.suit }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 结算玩家列表 -->
+                    <div class="flex flex-wrap justify-center gap-4 mb-8">
+                        <div v-for="p in activePlayers" :key="p.name" 
+                             class="bg-gray-800 p-4 rounded-xl border relative min-w-[120px]"
+                             :class="p.is_ready ? 'border-green-500' : 'border-gray-600'">
+                            <div v-if="p.is_ready" class="absolute top-0 right-0 bg-green-500 text-black text-xs px-1">READY</div>
+                            <div class="font-bold">{{ p.name }}</div>
+                            <div class="text-sm mb-2" :class="p.round_profit >=0 ? 'text-green-400':'text-red-400'">
+                                {{ p.round_profit >=0 ? '+' : ''}}{{ p.round_profit }}
+                            </div>
+                            <div class="flex gap-1 justify-center">
+                                <div v-for="c in p.hand" class="w-8 h-12 bg-white text-black flex items-center justify-center rounded text-xs font-bold border">
+                                    <span :class="getSuitColor(c.suit)">{{ c.rank_str }}<span class="text-[10px]">{{ c.suit }}</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button v-if="!imReady" @click="sendAction('ready')" class="w-full py-4 bg-green-600 hover:bg-green-500 font-bold rounded-xl">READY NEXT</button>
+                    <div v-else class="text-green-400 animate-pulse">Waiting for others...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+    <style>
+        .btn { padding: 12px 24px; border-radius: 8px; font-weight: bold; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; }
+        .btn:active { transform: scale(0.95); }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        /* 隐藏数字输入框的箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+    </style>
 </body>
 </html>
