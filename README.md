@@ -63,6 +63,13 @@ graph LR
 
 ## 🚀 快速启动 (Quick Start)
 
+### 0.克隆项目
+打开终端（CMD/PowerShell/Terminal），找个文件夹，运行：
+```bash
+git clone https://github.com/Finalbosslaodu/texas_poker_project.git
+cd texas_poker_project
+```
+
 ### 1. 环境准备
 确保您的电脑已安装 **Python 3.10** 或更高版本。
 
